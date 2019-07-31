@@ -1,59 +1,114 @@
 ---
 
-- name: Generate scripts
+- name: FILE | Creates easy-rsa base directory
+  file:
+    path: "{{ openvpn_pki_base_dir }}"
+    state: directory
+
+- name: COMMAND | Init PKI
+  command: "/usr/share/easy-rsa/easyrsa init-pki"
+  args:
+    creates: "{{ openvpn_pki_dir }}"
+    chdir: "{{ openvpn_pki_base_dir }}"
+
+- name: FILE | Bypasses EasyRSA issue ()
+  file:
+    src: "/usr/share/easy-rsa/x509-types"
+    dest: "{{ openvpn_pki_dir }}/x509-types"
+    state: link
+
+- name: TEMPLATE | Deploy easy-rsa env vars
   template:
-    src: "{{ item }}.j2"
-    dest: "{{ openvpn_etcdir }}/{{ item }}"
-    mode: 0o700
-  loop:
-    - vars
-    - build-server.sh
-    - build-client.sh
-    - revoke-client.sh
+    src: 'easyrsa-vars.j2'
+    dest: '{{ openvpn_pki_dir }}/vars'
 
-- name: Generate Server keys
-  command: "{{ openvpn_etcdir }}/build-server.sh"
+- name: COMMAND | Init CA 
+  command: "/usr/share/easy-rsa/easyrsa --batch build-ca nopass"
   args:
-    creates: "{{ openvpn_keydir }}"
+    creates: "{{ openvpn_pki_dir }}/ca.crt"
+    chdir: "{{ openvpn_pki_base_dir }}"
 
-- name: Generate tls-auth key
-  command:
-    openvpn --genkey --secret "{{ openvpn_keydir }}/{{ openvpn_tls_key }}"
+- name: COMMAND | Generate clients keys
+  command: "/usr/share/easy-rsa/easyrsa build-client-full {{ item }} nopass"
   args:
-    creates: "{{ openvpn_keydir }}/{{ openvpn_tls_key }}"
-  when: openvpn_tls_auth
-
-- name: Generate Clients keys
-  command: "{{ openvpn_etcdir }}/build-client.sh {{ item }}"
-  args:
-    creates: "{{ openvpn_keydir }}/{{ item }}.crt"
+    creates: "{{ openvpn_pki_dir }}/private/{{ item }}.key"
+    chdir: "{{ openvpn_pki_base_dir }}"
   loop: "{{ openvpn_clients }}"
 
-- name: Revoke Clients keys
-  command: "{{ openvpn_etcdir }}/revoke-client.sh {{ item }}"
+- name: COMMAND | Generate server keys
+  command: "/usr/share/easy-rsa/easyrsa build-client-full server nopass"
   args:
-    removes: "{{ openvpn_keydir }}/{{ item }}.crt"
+    creates: "{{ openvpn_pki_dir }}/private/server.key"
+    chdir: "{{ openvpn_pki_base_dir }}"
+
+- name: COMMAND | Remoke keys
+  command: "/usr/share/easy-rsa/easyrsa --batch revoke {{ item }} nopass"
+  args:
+    removes: "{{ openvpn_pki_dir }}/private/{{ item }}.key"
+    chdir: "{{ openvpn_pki_base_dir }}"
   loop: "{{ openvpn_clients_revoke }}"
 
-- include: read-client-files.yml
-  when: openvpn_unified_client_profiles
+- name: COMMAND | Generate DH
+  command: "/usr/share/easy-rsa/easyrsa --batch gen-dh"
+  args:
+    creates: "{{ openvpn_pki_dir }}/dh.pem"
+    chdir: "{{ openvpn_pki_base_dir }}"
+
+  ###- name: Generate scripts
+  ###  template:
+  ###    src: "{{ item }}.j2"
+  ###    dest: "{{ openvpn_etcdir }}/{{ item }}"
+  ###    mode: 0o700
+  ###  loop:
+  ###    - vars
+  ###    - build-server.sh
+  ###    - build-client.sh
+  ###    - revoke-client.sh
+  ###
+  ###- name: Generate Server keys
+  ###  command: "{{ openvpn_etcdir }}/build-server.sh"
+  ###  args:
+  ###    creates: "{{ openvpn_datadir }}"
+  ###
+  ###- name: Generate tls-auth key
+  ###  command:
+  ###    openvpn --genkey --secret "{{ openvpn_datadir }}/{{ openvpn_tls_key }}"
+  ###  args:
+  ###    creates: "{{ openvpn_datadir }}/{{ openvpn_tls_key }}"
+  ###  when: openvpn_tls_auth
+  ###
+  ###- name: Generate Clients keys
+  ###  command: "{{ openvpn_etcdir }}/build-client.sh {{ item }}"
+  ###  args:
+  ###    creates: "{{ openvpn_datadir }}/{{ item }}.crt"
+  ###  loop: "{{ openvpn_clients }}"
+
+  ###- name: Revoke Clients keys
+  ###  command: "{{ openvpn_etcdir }}/revoke-client.sh {{ item }}"
+  ###  args:
+  ###    removes: "{{ openvpn_datadir }}/{{ item }}.crt"
+  ###  loop: "{{ openvpn_clients_revoke }}"
+
+#- include: read-client-files.yml
+#  when: openvpn_unified_client_profiles
 
 - name: Create client configuration directory if requested
   file:
     path: "{{ openvpn_client_config_dir }}"
-    mode: 0o755
+    mode: 0755
     state: directory
   when: openvpn_client_config_dir is defined
 
 - name: Check if crl.pem exists
   stat:
-    path: "{{ openvpn_keydir }}/crl.pem"
+    path: "{{ openvpn_pki_dir }}/crl.pem"
   register: crl_pem_file
+
 
 - name: Generate Clients configurations
   template:
     src: client.conf.j2
-    dest: "{{ openvpn_keydir }}/{{ item }}.ovpn"
+    dest: "{{ openvpn_datadir }}/{{ item }}.ovpn"
   loop: "{{ openvpn_clients }}"
   register: openvpn_clients_changed
 
@@ -61,19 +116,19 @@
   command: >-
     zip -j
       {{ item.item }}.zip
-      {{ item.item }}.crt
-      {{ item.item }}.key
+      {{ openvpn_pki_dir }}/issued/{{ item.item }}.crt
+      {{ openvpn_pki_dir }}/private/{{ item.item }}.key
       {{ item.item }}.ovpn
       ca.crt
       {{ openvpn_tls_key if openvpn_tls_auth else '' }}
   loop: "{{ openvpn_clients_changed.results }}"
   args:
-    chdir: "{{ openvpn_keydir }}"
+    chdir: "{{ openvpn_datadir }}"
     creates: "{{ item.item }}.zip"
 
 - name: Download client credentials (zip)
   fetch:
-    src: "{{ openvpn_keydir }}/{{ item.item }}.zip"
+    src: "{{ openvpn_datadir }}/{{ item.item }}.zip"
     dest: "{{ openvpn_download_dir }}"
     flat: true
     validate_checksum: true
@@ -84,7 +139,7 @@
 
 - name: Download client credentials (ovpn)
   fetch:
-    src: "{{ openvpn_keydir }}/{{ item.item }}.ovpn"
+    src: "{{ openvpn_datadir }}/{{ item.item }}.ovpn"
     dest: "{{ openvpn_download_dir }}"
     flat: true
     validate_checksum: true

@@ -6,6 +6,7 @@
     update_cache: true
   vars:
     requirements:
+      - easy-rsa
       - openvpn
       - openssl
       - zip
@@ -14,11 +15,6 @@
   yum:
     name: python-passlib
   when: openvpn_use_pam_users | length > 0
-
-- name: Install easy-rsa package
-  yum:
-    name: easy-rsa
-  when: openvpn_use_system_easyrsa | bool
 
 - name: Install LDAP dependencies
   yum:

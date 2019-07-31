@@ -4,13 +4,10 @@
 openvpn_enabled: true
 
 openvpn_etcdir: /etc/openvpn
-openvpn_keydir: "{{ openvpn_etcdir }}/keys"
+openvpn_datadir: "{{ openvpn_etcdir }}/data"
 
 # Set to 'true' to install openvpn from the upstream repo
 openvpn_use_external_repo: false
-
-# Set to 'true' to install EasyRSA from system packages
-openvpn_use_system_easyrsa: false
 
 # Set to true to make the vpn server NAT incoming traffic
 openvpn_route_traffic: false
@@ -69,7 +66,7 @@ openvpn_key_province: CA
 openvpn_key_city: SanFrancisco
 openvpn_key_org: Fort-Funston
 openvpn_key_email: me@myhost.mydomain
-openvpn_key_size: 1024
+openvpn_key_size: 2048
 
 # Make clients certificate
 openvpn_clients:
@@ -102,3 +99,5 @@ openvpn_unified_client_profiles: false
 # Download the created client credentials to the specified directory
 openvpn_download_clients: false
 openvpn_download_dir: "client_credentials/"
+
+openvpn_configure_forwarding: true

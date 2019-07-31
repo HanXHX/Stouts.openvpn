@@ -1,4 +1,8 @@
 ---
+- name: SET_FACT | Bypass https://github.com/ansible/ansible/issues/19874
+  set_fact:
+    ansible_distribution_release: 'buster'
+  when: ansible_facts.distribution_major_version == "buster/sid"
 
 - name: Include OS-specific variables.
   include_vars:
@@ -6,8 +10,7 @@
   vars:
     params:
       files:
-        - "{{ ansible_distribution }}.{{
-              ansible_lsb.codename | default(omit) }}.yml"
+        - "{{ ansible_distribution }}.{{ ansible_distribution_release }}.yml"
         - "{{ ansible_distribution }}.yml"
         - "{{ ansible_os_family }}.yml"
         - "Common-default.yml"

@@ -19,6 +19,7 @@
     force: true
   vars:
     requirements:
+      - easy-rsa
       - openvpn
       - udev
       - openssl
@@ -33,11 +34,6 @@
     dependencies:
       - libpam-pwdfile
       - python-passlib
-
-- name: Install easy-rsa package
-  apt:
-    name: easy-rsa
-  when: openvpn_use_system_easyrsa | bool
 
 - name: Install LDAP dependencies
   apt:

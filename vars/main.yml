@@ -1,0 +1,4 @@
+---
+
+openvpn_pki_base_dir: '/srv/openvpn'
+openvpn_pki_dir: '{{ openvpn_pki_base_dir}}/pki'

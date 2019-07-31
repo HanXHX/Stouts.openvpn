@@ -38,9 +38,9 @@
 
 - name: Ensure openvpn key dir has the right permission
   file:
-    path: "{{ openvpn_keydir }}"
+    path: "{{ openvpn_datadir }}"
     state: directory
-    mode: 0o700
+    mode: 0700
     owner: "{{ openvpn_user }}"
 
 - name: Set ip forwarding in the sysctl file and reload if necessary
@@ -50,3 +50,4 @@
     sysctl_set: true
     state: present
     reload: true
+  when: openvpn_configure_forwarding
